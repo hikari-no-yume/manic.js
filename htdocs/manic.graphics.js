@@ -145,36 +145,43 @@ window.manic.graphics = (function (manic) {
         return tex;
     }
     
-    var textureCache = {},
-        textureSetCache = {};
-    function getTexture(id) {
-        if (textureSetCache.hasOwnProperty(id)) {
-            return textureSetCache[id];
+    var materialCache = {},
+        materialSetCache = {};
+    function getMaterialSet(id) {
+        if (materialSetCache.hasOwnProperty(id)) {
+            return materialSetCache[id];
         } else {
             var coords = getTextureCoordinates(id),
-                textureSet = [];
+                transparent = isTransparentBlock(id),
+                materialSet = [];
             for (var i = 0; i < coords.length; i++) {
                 var pair = coords[i],
                     pairString = pair[0] + ',' + pair[1],
-                    texture;
-                if (textureCache.hasOwnProperty(pairString)) {
-                    texture = textureCache[pairString];
+                    material;
+                if (materialCache.hasOwnProperty(pairString)) {
+                    material = materialCache[pairString];
                 } else {
-                    texture = texImage.clone();
+                    var texture = texImage.clone();
                     texture.offset.set(pair[0] / texTileCount, 1 - (1 + pair[1]) / texTileCount);
                     texture.repeat.set(1 / texTileCount, 1 / texTileCount);
                     texture.needsUpdate = true;
-                    textureCache[pairString] = texture;
+                    material = new THREE.MeshBasicMaterial({
+                        color: 0xffffff,
+                        map: texture,
+                        transparent: transparent,
+                        overdraw: transparent
+                    });
+                    materialCache[pairString] = material;
                 }
-                textureSet[i] = texture;
+                materialSet[i] = material;
             }
-            textureSetCache[id] = textureSet;
-            return textureSet;
+            materialSetCache[id] = materialSet;
+            return materialSet;
         }
     }
 
-    function randomTexture() {
-        return getTexture(Math.rand(41));
+    function randomMaterialSet() {
+        return getMaterialSet(Math.rand(0x31 + 1));
     }
 
     function calcIsometricSize(mapSize) {
@@ -199,13 +206,7 @@ window.manic.graphics = (function (manic) {
     /* three.js orders faces differently so we use this to reorder */
     var reorderingMap = [2, 3, 0, 1, 4, 5];
 
-    function makeFace(texture, transparent, faceId) {
-        var material = new THREE.MeshBasicMaterial({
-            color: 0xffffff,
-            map: texture,
-            transparent: transparent,
-            overdraw: transparent
-        });
+    function makeFace(material, faceId) {
         var face = new THREE.Mesh(cachedPlaneGeometry, material);
         switch (faceId) {
             case faces.Top:
@@ -243,7 +244,7 @@ window.manic.graphics = (function (manic) {
      * would only draw the top face
      */
     function makeCube(id, faceVisibility) {
-        var textureSet = getTexture(id);
+        var materialSet = getMaterialSet(id);
         var transparent = isTransparentBlock(id);
         
         // More efficient to use actual cube than six surfaces, where possible
@@ -252,13 +253,8 @@ window.manic.graphics = (function (manic) {
             && faceVisibility[4] && faceVisibility[5]) {
             var materials = [];
             
-            textureSet.forEach(function (texture, i) {
-                materials[reorderingMap[i]] = new THREE.MeshBasicMaterial({
-                    color: 0xffffff,
-                    map: texture,
-                    transparent: transparent,
-                    overdraw: transparent
-                });
+            materialSet.forEach(function (material, i) {
+                materials[reorderingMap[i]] = material;
             });
             var cube = new THREE.Mesh(cachedCubeGeometry, new THREE.MeshFaceMaterial(materials));
             return cube;
@@ -266,7 +262,7 @@ window.manic.graphics = (function (manic) {
             var cube = new THREE.Object3D();
             for (var i = 0; i < faceVisibility.length; i++) {
                 if (faceVisibility[i]) {
-                    cube.add(makeFace(textureSet[i], transparent, i));
+                    cube.add(makeFace(materialSet[i], i));
                 }
             }
             return cube;
@@ -297,7 +293,7 @@ window.manic.graphics = (function (manic) {
             var scene = new THREE.Scene();
             var camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.1, 1000 );
             var renderer = new THREE.WebGLRenderer();
-            renderer.setClearColorHex( 0xa2d0ff, 1 );
+            renderer.setClearColor(0xa2d0ff);
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.domElement.id = 'canvas';
             document.body.appendChild(renderer.domElement);
