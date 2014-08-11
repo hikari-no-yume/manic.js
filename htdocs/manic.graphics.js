@@ -321,7 +321,7 @@ window.manic.graphics = (function (manic) {
                         
                         var neighbourTop = getBlock(x, y + 1, z),
                             neighbourBottom = getBlock(x, y - 1, z),
-                            neighbourFront = getBlock(x - 1, y, z + 1),
+                            neighbourFront = getBlock(x, y, z + 1),
                             neighbourRight = getBlock(x + 1, y, z),
                             neighbourBack = getBlock(x, y, z - 1),
                             neighbourLeft = getBlock(x - 1, y, z);
