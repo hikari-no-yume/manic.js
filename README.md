@@ -29,9 +29,9 @@ Finally, we use a WebSocket-to-TCP bridge. I'm using the, quite frankly, rubbish
 OK, but is it worth using?
 ==========================
 
-No, not really just now. It'll display at quite poor FPS (no optimisation) a portion of the Minecraft world, and you can move around it, but it ignores most packets (it doesn't even display players) and your only way to communicate is by the console. But hey, we're getting there!
+No, not really just now. It'll display at quite poor FPS (limited optimisation) a portion of the Minecraft world, and you can move around it, but it ignores most packets (it doesn't even display players) and your only way to communicate is by the console. But hey, we're getting there!
 
 Why is it called manic.js?!
 ===========================
 
-It's a reference to [Manic Digger](http://manicdigger.sourceforge.net/), an open-source Minecraft Classic clone, of course. Since Notch objected, the Classic-compatible mode is disabled by default, but it's easy to re-enable by compiling it yourself. ;)
+It's a reference to [Manic Digger](http://manicdigger.sourceforge.net/), an open-source Minecraft Classic clone, of course. Since Notch objected, the Classic-compatible mode was disabled by default, but it's easy to re-enable by compiling Manic Digger yourself. (Shhh, don't tell Notch!)

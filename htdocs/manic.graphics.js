@@ -298,7 +298,7 @@ window.manic.graphics = (function (manic) {
             renderer.domElement.id = 'canvas';
             document.body.appendChild(renderer.domElement);
         
-            var limit = 16;
+            var limit = 32;
         
             camera.position.y = 74;
             camera.position.z = limit / 2 + Math.cos(camera.rotation.y) * limit / 2;
