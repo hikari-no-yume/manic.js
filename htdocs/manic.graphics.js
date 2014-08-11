@@ -302,9 +302,9 @@ window.manic.graphics = (function (manic) {
             renderer.domElement.id = 'canvas';
             document.body.appendChild(renderer.domElement);
         
-            var limit = 32, yMin = 31, yMax = 64;
+            var limit = 16;
         
-            camera.position.y = 14 + yMin;
+            camera.position.y = 74;
             camera.position.z = limit / 2 + Math.cos(camera.rotation.y) * limit / 2;
             camera.position.x = limit / 2 + Math.sin(camera.rotation.y) * limit / 2;
             
@@ -315,7 +315,7 @@ window.manic.graphics = (function (manic) {
 			controls.lookVertical = true;
         
             for (var x = 0; x < limit; x++) {
-                for (var y = yMin; y < yMax; y++) {
+                for (var y = 0; y < ySize; y++) {
                     for (var z = 0; z < limit; z++) {
                         var block = getBlock(x, y, z);
                         
@@ -353,9 +353,6 @@ window.manic.graphics = (function (manic) {
                 requestAnimationFrame(render);
                 controls.update( clock.getDelta() );
                 renderer.render(scene, camera);
-                //camera.rotation.y += 0.01;
-                //camera.position.z = limit / 2 + Math.cos(camera.rotation.y) * limit / 2;
-                //camera.position.x = limit / 2 + Math.sin(camera.rotation.y) * limit / 2;
             });
             
             window.addEventListener( 'resize', function () {
