@@ -62,6 +62,16 @@ window.manic.graphics = (function (manic) {
         Obsidian: 0x31
     });
 
+    /* blocks that have semi-transparent textures */
+    function isTransparentBlock(id) {
+        return (id === blockTypes.Leaves || id === blockTypes.Glass);
+    }
+    
+    /* blocks that can be seen through (used for visibility calculation) */
+    function isPortalBlock(id) {
+        return (id === blockTypes.Air || isTransparentBlock(id));
+    }
+
     var texFile = 'terrain.png';
     var texImage = null;
     var texTileSize = 16, texTileCount = 16;
@@ -126,7 +136,6 @@ window.manic.graphics = (function (manic) {
         } else {
             tex = [[-1, -1], [-1, -1], [-1, -1], [-1, -1], [-1, -1], [-1, -1]];
         }
-        console.log(blockTypes.getKey(id));
         return tex;
     }
     
@@ -175,7 +184,12 @@ window.manic.graphics = (function (manic) {
 
     function makeCube(id) {
         var material = new THREE.MeshFaceMaterial(getTexture(id).map(function (texture) {
-            return new THREE.MeshBasicMaterial( { color: 0xffffff, map: texture } );
+            return new THREE.MeshBasicMaterial({
+                color: 0xffffff,
+                map: texture,
+                transparent: isTransparentBlock(id),
+                overdraw: isTransparentBlock(id)
+            });
         }));
         var cube = new THREE.Mesh(cachedCubeGeometry, material);
         return cube;
@@ -192,30 +206,10 @@ window.manic.graphics = (function (manic) {
                 };
     }());
     
-    function makeVisibilityMap(levelArray, xSize, ySize, zSize) {
-        var visMap = [];
-
-        for (var x = 0; x < xSize; x++) {
-            for (var y = 0; y < ySize; y++) {
-                for (var z = 0; z < zSize; z++) {
-                    visMap[levelArray[y * xSize * zSize + z * zSize + x]] =
-                        (!getBlock(x + 1, y, z) || !getBlock(x - 1, y, z)
-                        || !getBlock(x, y, z + 1) || !getBlock(x, y,z - 1)
-                        || !getBlock(x, y + 1, z) || !getBlock(x, y - 1, z));
-                }
-            }
-        }
-        return visMap;
-    }
-    
     function init(levelArray, xSize, ySize, zSize) {
         function getBlock(x, y, z) {
             return levelArray[y * xSize * zSize + z * zSize + x];
         }
-        
-        //console.log('Generating visibility map...');
-        //var visMap = makeVisibilityMap(levelArray, xSize, ySize, zSize);
-        //console.log('Generated visibility map');
         
         texImage = THREE.ImageUtils.loadTexture(texFile, THREE.UVMapping, function () {
             // pixelated upscale, smooth downscale
@@ -246,9 +240,9 @@ window.manic.graphics = (function (manic) {
                 for (var y = yMin; y < yMax; y++) {
                     for (var z = 0; z < limit; z++) {
                         var block = getBlock(x, y, z);
-                        var visible = !getBlock(x, y - 1, z) || !getBlock(x, y + 1, z)
-                            || !getBlock(x - 1, y, z) || !getBlock(x + 1, y, z)
-                            || !getBlock(x, y, z - 1) || !getBlock(x, y, z + 1);
+                        var visible = isPortalBlock(getBlock(x, y - 1, z)) || isPortalBlock(getBlock(x, y + 1, z))
+                            || isPortalBlock(getBlock(x - 1, y, z)) || isPortalBlock(getBlock(x + 1, y, z))
+                            || isPortalBlock(getBlock(x, y, z - 1)) || isPortalBlock(getBlock(x, y, z + 1));
                         if (block === blockTypes.Air || !visible) {
                             continue;
                         }
