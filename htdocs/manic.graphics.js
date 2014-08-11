@@ -205,37 +205,41 @@ window.manic.graphics = (function (manic) {
 
     /* three.js orders faces differently so we use this to reorder */
     var reorderingMap = [2, 3, 0, 1, 4, 5];
+    
+    var faceDirections = [];
+    faceDirections[faces.Top] = [0, 1, 0];
+    faceDirections[faces.Bottom] = [0, -1, 0];
+    faceDirections[faces.Front] = [0, 0, 1];
+    faceDirections[faces.Right] = [1, 0, 0];
+    faceDirections[faces.Back] = [0, 0, -1];
+    faceDirections[faces.Left] = [-1, 0, 0];
 
     function makeFace(material, faceId) {
-        var face = new THREE.Mesh(cachedPlaneGeometry, material);
+        var face = new THREE.Mesh(cachedPlaneGeometry, material),
+            direction = faceDirections[faceId];
         switch (faceId) {
             case faces.Top:
-                face.position.set(0, 0.5, 0);
                 face.rotation.set(-Math.PI / 2, 0, 0);
                 break;
             case faces.Bottom:
-                face.position.set(0, -0.5, 0);
                 face.rotation.set(Math.PI / 2, 0, 0);
                 break;
             case faces.Front:
-                face.position.set(0, 0, 0.5);
                 face.rotation.set(0, 0, 0);
                 break;
             case faces.Right:
-                face.position.set(0.5, 0, 0);
                 face.rotation.set(0, Math.PI/2, 0);
                 break;
             case faces.Back:
-                face.position.set(0, 0, -0.5);
                 face.rotation.set(0, Math.PI, 0);
                 break;
             case faces.Left:
-                face.position.set(-0.5, 0, 0);
                 face.rotation.set(0, -Math.PI/2, 0);
                 break;
             default:
                 break;
         }
+        face.position.set(direction[0] / 2, direction[1] / 2, direction[2] / 2);
         return face;
     }
 
@@ -319,21 +323,13 @@ window.manic.graphics = (function (manic) {
                             continue;
                         }
                         
-                        var neighbourTop = getBlock(x, y + 1, z),
-                            neighbourBottom = getBlock(x, y - 1, z),
-                            neighbourFront = getBlock(x, y, z + 1),
-                            neighbourRight = getBlock(x + 1, y, z),
-                            neighbourBack = getBlock(x, y, z - 1),
-                            neighbourLeft = getBlock(x - 1, y, z);
-                            
-                        var cube = makeCube(block, [
-                            block !== neighbourTop && isPortalBlock(neighbourTop),
-                            block !== neighbourBottom && isPortalBlock(neighbourBottom),
-                            block !== neighbourFront && isPortalBlock(neighbourFront),
-                            block !== neighbourRight && isPortalBlock(neighbourRight),
-                            block !== neighbourBack && isPortalBlock(neighbourBack),
-                            block !== neighbourLeft && isPortalBlock(neighbourLeft)
-                        ]);
+                        var faceVisibility = faceDirections.map(function (direction) {
+                            return getBlock(x + direction[0], y + direction[1], z + direction[2]);
+                        }).map(function (neighbour) {
+                            return block !== neighbour && isPortalBlock(neighbour);
+                        });
+                        
+                        var cube = makeCube(block, faceVisibility);
                         
                         cube.position.x = x;
                         cube.position.y = y;
