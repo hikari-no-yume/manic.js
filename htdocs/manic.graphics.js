@@ -210,27 +210,27 @@ window.manic.graphics = (function (manic) {
         var face = new THREE.Mesh(cachedPlaneGeometry, material);
         switch (faceId) {
             case faces.Top:
-                face.position.set(0, 0.5, -0.5);
+                face.position.set(0, 0.5, 0);
                 face.rotation.set(-Math.PI / 2, 0, 0);
                 break;
             case faces.Bottom:
-                face.position.set(0, -0.5, -0.5);
+                face.position.set(0, -0.5, 0);
                 face.rotation.set(Math.PI / 2, 0, 0);
                 break;
             case faces.Front:
-                face.position.set(0, 0, 0);
+                face.position.set(0, 0, 0.5);
                 face.rotation.set(0, 0, 0);
                 break;
             case faces.Right:
-                face.position.set(0.5, 0, -0.5);
+                face.position.set(0.5, 0, 0);
                 face.rotation.set(0, Math.PI/2, 0);
                 break;
             case faces.Back:
-                face.position.set(0, 0, -1);
+                face.position.set(0, 0, -0.5);
                 face.rotation.set(0, Math.PI, 0);
                 break;
             case faces.Left:
-                face.position.set(-0.5, 0, -0.5);
+                face.position.set(-0.5, 0, 0);
                 face.rotation.set(0, -Math.PI/2, 0);
                 break;
             default:
