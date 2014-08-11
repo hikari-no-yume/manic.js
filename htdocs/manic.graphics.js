@@ -304,9 +304,9 @@ window.manic.graphics = (function (manic) {
         
             var limit = 32;
         
-            camera.position.y = 74;
-            camera.position.z = limit / 2 + Math.cos(camera.rotation.y) * limit / 2;
-            camera.position.x = limit / 2 + Math.sin(camera.rotation.y) * limit / 2;
+            camera.position.y = ySize / 2 + 10;
+            camera.position.z = limit / 2;
+            camera.position.x = limit / 2;
             
 			var controls = new THREE.FirstPersonControls( camera );
 
