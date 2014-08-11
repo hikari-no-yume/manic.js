@@ -146,9 +146,7 @@ window.manic.graphics = (function (manic) {
     }
     
     var textureCache = {},
-        textureSetCache = {},
-        /* three.js orders faces differently so we use this to reorder */
-        reorderingMap = [2, 3, 0, 1, 4, 5];
+        textureSetCache = {};
     function getTexture(id) {
         if (textureSetCache.hasOwnProperty(id)) {
             return textureSetCache[id];
@@ -168,7 +166,7 @@ window.manic.graphics = (function (manic) {
                     texture.needsUpdate = true;
                     textureCache[pairString] = texture;
                 }
-                textureSet[reorderingMap[i]] = texture;
+                textureSet[i] = texture;
             }
             textureSetCache[id] = textureSet;
             return textureSet;
@@ -186,19 +184,93 @@ window.manic.graphics = (function (manic) {
         ];
     }
 
-    var cachedCubeGeometry = new THREE.BoxGeometry(1,1,1);
+    var cachedCubeGeometry = new THREE.BoxGeometry(1, 1, 1);
+    var cachedPlaneGeometry = new THREE.PlaneGeometry(1, 1);
 
-    function makeCube(id) {
-        var material = new THREE.MeshFaceMaterial(getTexture(id).map(function (texture) {
-            return new THREE.MeshBasicMaterial({
-                color: 0xffffff,
-                map: texture,
-                transparent: isTransparentBlock(id),
-                overdraw: isTransparentBlock(id)
+    var faces = new manic.Enum({
+        Top: 0,
+        Bottom: 1,
+        Front: 2,
+        Right: 3,
+        Back: 4,
+        Left: 5
+    });
+
+    /* three.js orders faces differently so we use this to reorder */
+    var reorderingMap = [2, 3, 0, 1, 4, 5];
+
+    function makeFace(texture, transparent, faceId) {
+        var material = new THREE.MeshBasicMaterial({
+            color: 0xffffff,
+            map: texture,
+            transparent: transparent,
+            overdraw: transparent
+        });
+        var face = new THREE.Mesh(cachedPlaneGeometry, material);
+        switch (faceId) {
+            case faces.Top:
+                face.position.set(0, 0.5, -0.5);
+                face.rotation.set(-Math.PI / 2, 0, 0);
+                break;
+            case faces.Bottom:
+                face.position.set(0, -0.5, -0.5);
+                face.rotation.set(Math.PI / 2, 0, 0);
+                break;
+            case faces.Front:
+                face.position.set(0, 0, 0);
+                face.rotation.set(0, 0, 0);
+                break;
+            case faces.Right:
+                face.position.set(0.5, 0, -0.5);
+                face.rotation.set(0, Math.PI/2, 0);
+                break;
+            case faces.Back:
+                face.position.set(0, 0, -1);
+                face.rotation.set(0, Math.PI, 0);
+                break;
+            case faces.Left:
+                face.position.set(-0.5, 0, -0.5);
+                face.rotation.set(0, -Math.PI/2, 0);
+                break;
+            default:
+                break;
+        }
+        return face;
+    }
+
+    /* faceVisibility is used to exclude specific faces
+     * e.g. makeCube(blockTypes.Grass, [true, false, false, false, false, false])
+     * would only draw the top face
+     */
+    function makeCube(id, faceVisibility) {
+        var textureSet = getTexture(id);
+        var transparent = isTransparentBlock(id);
+        
+        // More efficient to use actual cube than six surfaces, where possible
+        if (faceVisibility[0] && faceVisibility[1]
+            && faceVisibility[2] && faceVisibility[3]
+            && faceVisibility[4] && faceVisibility[5]) {
+            var materials = [];
+            
+            textureSet.forEach(function (texture, i) {
+                materials[reorderingMap[i]] = new THREE.MeshBasicMaterial({
+                    color: 0xffffff,
+                    map: texture,
+                    transparent: transparent,
+                    overdraw: transparent
+                });
             });
-        }));
-        var cube = new THREE.Mesh(cachedCubeGeometry, material);
-        return cube;
+            var cube = new THREE.Mesh(cachedCubeGeometry, new THREE.MeshFaceMaterial(materials));
+            return cube;
+        } else {
+            var cube = new THREE.Object3D();
+            for (var i = 0; i < faceVisibility.length; i++) {
+                if (faceVisibility[i]) {
+                    cube.add(makeFace(textureSet[i], transparent, i));
+                }
+            }
+            return cube;
+        }
     }
 
     var requestFrame = (function(){
@@ -246,13 +318,27 @@ window.manic.graphics = (function (manic) {
                 for (var y = yMin; y < yMax; y++) {
                     for (var z = 0; z < limit; z++) {
                         var block = getBlock(x, y, z);
-                        var visible = isPortalBlock(getBlock(x, y - 1, z)) || isPortalBlock(getBlock(x, y + 1, z))
-                            || isPortalBlock(getBlock(x - 1, y, z)) || isPortalBlock(getBlock(x + 1, y, z))
-                            || isPortalBlock(getBlock(x, y, z - 1)) || isPortalBlock(getBlock(x, y, z + 1));
-                        if (block === blockTypes.Air || !visible) {
+                        
+                        if (block === blockTypes.Air) {
                             continue;
                         }
-                        var cube = makeCube(block);
+                        
+                        var neighbourTop = getBlock(x, y + 1, z),
+                            neighbourBottom = getBlock(x, y - 1, z),
+                            neighbourFront = getBlock(x - 1, y, z + 1),
+                            neighbourRight = getBlock(x + 1, y, z),
+                            neighbourBack = getBlock(x, y, z - 1),
+                            neighbourLeft = getBlock(x - 1, y, z);
+                            
+                        var cube = makeCube(block, [
+                            block !== neighbourTop && isPortalBlock(neighbourTop),
+                            block !== neighbourBottom && isPortalBlock(neighbourBottom),
+                            block !== neighbourFront && isPortalBlock(neighbourFront),
+                            block !== neighbourRight && isPortalBlock(neighbourRight),
+                            block !== neighbourBack && isPortalBlock(neighbourBack),
+                            block !== neighbourLeft && isPortalBlock(neighbourLeft)
+                        ]);
+                        
                         cube.position.x = x;
                         cube.position.y = y;
                         cube.position.z = z;
