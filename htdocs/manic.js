@@ -12,6 +12,8 @@
         (new Uint8Array(dest, pos, len)).set(new Uint8Array(src));
     }
     
+    /* Thanks to the Minecraft Coalition for protocol info: http://wiki.vg/Classic_Protocol */
+    
     /* packet IDs */
     var packetTypes = new manic.Enum({
         Identification: 0x00,
