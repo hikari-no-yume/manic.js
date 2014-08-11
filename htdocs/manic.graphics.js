@@ -64,12 +64,18 @@ window.manic.graphics = (function (manic) {
 
     /* blocks that have semi-transparent textures */
     function isTransparentBlock(id) {
-        return (id === blockTypes.Leaves || id === blockTypes.Glass);
+        return (id === blockTypes.Leaves
+            || id === blockTypes.Glass
+            || id === blockTypes.Water
+            || id === blockTypes.StationaryWater
+            || id === blockTypes.Lava
+            || id === blockTypes.StationaryLava);
     }
     
     /* blocks that can be seen through (used for visibility calculation) */
     function isPortalBlock(id) {
-        return (id === blockTypes.Air || isTransparentBlock(id));
+        return (id === blockTypes.Air
+            || isTransparentBlock(id));
     }
 
     var texFile = 'terrain.png';
