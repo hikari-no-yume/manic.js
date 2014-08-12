@@ -62,6 +62,21 @@ window.manic.graphics = (function (manic) {
         Obsidian: 0x31
     });
 
+    /* flower-shaped things */
+    function isFlower(id) {
+        return (id === blockTypes.Sapling
+            || id === blockTypes.Dandelion
+            || id === blockTypes.Rose
+            || id === blockTypes.BrownMushroom
+            || id === blockTypes.RedMushroom);
+    }
+
+    /* blocks that aren't just cubes */
+    function isSpecialBlock(id) {
+        return (id === blockTypes.Slab
+            || isFlower(id));
+    }
+
     /* blocks that have semi-transparent textures */
     function isTransparentBlock(id) {
         return (id === blockTypes.Leaves
@@ -69,13 +84,15 @@ window.manic.graphics = (function (manic) {
             || id === blockTypes.Water
             || id === blockTypes.StationaryWater
             || id === blockTypes.Lava
-            || id === blockTypes.StationaryLava);
+            || id === blockTypes.StationaryLava
+            || isFlower(id));
     }
     
     /* blocks that can be seen through (used for visibility calculation) */
     function isPortalBlock(id) {
         return (id === blockTypes.Air
-            || isTransparentBlock(id));
+            || isTransparentBlock(id)
+            || isSpecialBlock(id));
     }
 
     var texFile = 'terrain.png';
@@ -148,6 +165,22 @@ window.manic.graphics = (function (manic) {
         return getTextureCoordinatesSet(Math.rand(0x31 + 1));
     }
 
+    function getFlowerTextureCoordinates(id) {
+        if (id === blockTypes.Rose) {
+            return [12, 0];
+        } else if (id === blockTypes.Dandelion) {
+            return [13, 0];
+        } else if (id === blockTypes.RedMushroom) {
+            return [12, 1];
+        } else if (id === blockTypes.BrownMushroom) {
+            return [13, 1];
+        } else if (id === blockTypes.Sapling) {
+            return [15, 0];
+        } else {
+            return [-1, -1];
+        }
+    }
+
     var faces = new manic.Enum({
         Top: 0,
         Bottom: 1,
@@ -188,6 +221,39 @@ window.manic.graphics = (function (manic) {
         face.applyMatrix(reusableMatrix.makeTranslation(direction[0] / 2, direction[1] / 2, direction[2] / 2));
         return face;
     });
+    
+    var cachedFlowerSliceGeometries = [0, 1, 2, 3].map(function (rotation) {
+        return rotation * Math.PI / 2 + Math.PI / 4;
+    }).map(function (rotation) {
+        var face = new THREE.PlaneGeometry(1, 1);
+        face.applyMatrix(reusableMatrix.makeRotationY(rotation));
+        return face;
+    });
+
+    // Utility function to merge a plane geometry into another geometry with a given matrix and set texture coordinates
+    function mergePlaneSetTexture(targetGeometry, planeGeometry, matrix, textureCoordinates) {  
+        // Face texture co-ordinates (UV mapping)
+        var LeftX = textureCoordinates[0] / texTileCount,
+            RightX = LeftX + 1 / texTileCount,
+            TopY = 1 - (1 + textureCoordinates[1]) / texTileCount,
+            BottomY = TopY + 1 / texTileCount;
+        
+        // Add face geometry to map geometry
+        targetGeometry.merge(planeGeometry, matrix);
+        
+        // We update existing (default) UVs for cube face, hence the length offsets
+        // PlaneGeometry is made up of two triangles
+        var faceVertexUvs = targetGeometry.faceVertexUvs[0];
+        var faceVertexUv = faceVertexUvs[faceVertexUvs.length - 2];
+        faceVertexUv[0].set(LeftX, BottomY);
+        faceVertexUv[1].set(LeftX, TopY);
+        faceVertexUv[2].set(RightX, BottomY);
+        
+        faceVertexUv = faceVertexUvs[faceVertexUvs.length - 1];
+        faceVertexUv[0].set(LeftX, TopY);
+        faceVertexUv[1].set(RightX, TopY);
+        faceVertexUv[2].set(RightX, BottomY);
+    }
 
     /* Adds geometry for a cube to a map
      *
@@ -200,31 +266,31 @@ window.manic.graphics = (function (manic) {
         
         for (var faceId = 0; faceId < faceVisibility.length; faceId++) {
             if (faceVisibility[faceId]) {
-                var textureCoordinates = coordinateSet[faceId];
-                
-                // Face texture co-ordinates (UV mapping)
-                var LeftX = textureCoordinates[0] / texTileCount,
-                    RightX = LeftX + 1 / texTileCount,
-                    TopY = 1 - (1 + textureCoordinates[1]) / texTileCount,
-                    BottomY = TopY + 1 / texTileCount;
-                
-                // Add face geometry to map geometry
-                geometry.merge(cachedFaceGeometries[faceId], matrix);
-                
-                // We update existing (default) UVs for cube face, hence the length offsets
-                // PlaneGeometry is made up of two triangles
-                var faceVertexUvs = geometry.faceVertexUvs[0];
-                var faceVertexUv = faceVertexUvs[faceVertexUvs.length - 2];
-                faceVertexUv[0].set(LeftX, BottomY);
-                faceVertexUv[1].set(LeftX, TopY);
-                faceVertexUv[2].set(RightX, BottomY);
-                
-                faceVertexUv = faceVertexUvs[faceVertexUvs.length - 1];
-                faceVertexUv[0].set(LeftX, TopY);
-                faceVertexUv[1].set(RightX, TopY);
-                faceVertexUv[2].set(RightX, BottomY);
+                mergePlaneSetTexture(geometry, cachedFaceGeometries[faceId], matrix, coordinateSet[faceId]);
             }
         }
+    }
+    
+    /* Adds geometry for a "special block" to a map
+     *
+     * faceVisibility is not handled like addCube (it'll make it visible if ANY side matches)
+     */
+    function addSpecialBlock(id, faceVisibility, geometry, matrix) {
+        if (!faceVisibility[0] && !faceVisibility[1] && !faceVisibility[2]
+            && !faceVisibility[3] && !faceVisibility[4] && !faceVisibility[5]) {
+            return;
+        }
+        // This function only supports flowers for now, so for other special  blocks we pass on to addBlock
+        if (!isFlower(id)) {
+            addBlock(id, faceVisibility, geometry, matrix);
+            return;
+        }
+        
+        var coordinates = getFlowerTextureCoordinates(id);
+        
+        cachedFlowerSliceGeometries.forEach(function (sliceGeometry) {
+            mergePlaneSetTexture(geometry, sliceGeometry, matrix, coordinates);
+        });
     }
     
     /* Makes a map chunk within the given bounds (begin <= position < end)
@@ -249,11 +315,9 @@ window.manic.graphics = (function (manic) {
                     });
                     
                     // Transparent blocks can't be in same geometry due to rendering issues
-                    if (isTransparentBlock(block)) {
-                        addCube(block, faceVisibility, transparentChunkGeometry, reusableMatrix.makeTranslation(x - xBegin, y - yBegin, z - zBegin));
-                    } else {
-                        addCube(block, faceVisibility, chunkGeometry, reusableMatrix.makeTranslation(x - xBegin, y - yBegin, z - zBegin));
-                    }
+                    var targetGeometry = isTransparentBlock(block) ? transparentChunkGeometry : chunkGeometry;
+                    var addFunction = isSpecialBlock(block) ? addSpecialBlock : addCube;
+                    addFunction(block, faceVisibility, targetGeometry, reusableMatrix.makeTranslation(x - xBegin, y - yBegin, z - zBegin));
                 }
             }
         }
