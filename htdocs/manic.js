@@ -195,7 +195,7 @@
                     handlePackets();
                 };
                 reader.onerror = function () {
-                    throw new Exception("FileReader errored, :panic:");
+                    throw new Error("FileReader errored, :panic:");
                 };
                 reader.readAsArrayBuffer(e.data);
             } else {
