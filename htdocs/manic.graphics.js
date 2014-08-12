@@ -167,36 +167,24 @@ window.manic.graphics = (function (manic) {
     faceDirections[faces.Right] = [1, 0, 0];
     faceDirections[faces.Back] = [0, 0, -1];
     faceDirections[faces.Left] = [-1, 0, 0];
+    
+    var faceRotations = [];
+    faceRotations[faces.Top] = [-Math.PI / 2, 0, 0];
+    faceRotations[faces.Bottom] = [Math.PI / 2, 0, 0];
+    faceRotations[faces.Front] = [0, 0, 0];
+    faceRotations[faces.Right] = [0, Math.PI / 2, 0];
+    faceRotations[faces.Back] = [0, Math.PI, 0];
+    faceRotations[faces.Left] = [0, -Math.PI / 2, 0];
 
     /* We reuse this single matrix to save having to constantly allocate matrices */
     var reusableMatrix = new THREE.Matrix4();
 
     var cachedFaceGeometries = faceDirections.map(function (direction, faceId) {
         var face = new THREE.PlaneGeometry(1, 1);
-        switch (faceId) {
-            case faces.Top:
-                reusableMatrix.makeRotationX(-Math.PI / 2);
-                break;
-            case faces.Bottom:
-                reusableMatrix.makeRotationX(Math.PI / 2);
-                break;
-            case faces.Front:
-                // No rotation needed
-                reusableMatrix.identity();
-                break;
-            case faces.Right:
-                reusableMatrix.makeRotationY(Math.PI/2);
-                break;
-            case faces.Back:
-                reusableMatrix.makeRotationY(Math.PI);
-                break;
-            case faces.Left:
-                reusableMatrix.makeRotationY(-Math.PI/2);
-                break;
-            default:
-                break;
-        }
-        face.applyMatrix(reusableMatrix);
+        var rotation = faceRotations[faceId];
+        face.applyMatrix(reusableMatrix.makeRotationX(rotation[0]));
+        face.applyMatrix(reusableMatrix.makeRotationY(rotation[1]));
+        face.applyMatrix(reusableMatrix.makeRotationZ(rotation[2]));
         face.applyMatrix(reusableMatrix.makeTranslation(direction[0] / 2, direction[1] / 2, direction[2] / 2));
         return face;
     });
@@ -225,7 +213,7 @@ window.manic.graphics = (function (manic) {
                 
                 // We update existing (default) UVs for cube face, hence the length offsets
                 // PlaneGeometry is made up of two triangles
-                var faceVertexUvs =  geometry.faceVertexUvs[0];
+                var faceVertexUvs = geometry.faceVertexUvs[0];
                 var faceVertexUv = faceVertexUvs[faceVertexUvs.length - 2];
                 faceVertexUv[0].set(LeftX, BottomY);
                 faceVertexUv[1].set(LeftX, TopY);
@@ -237,6 +225,88 @@ window.manic.graphics = (function (manic) {
                 faceVertexUv[2].set(RightX, BottomY);
             }
         }
+    }
+    
+    /* Makes a map chunk within the given bounds (begin <= position < end)
+       getBlock is a callback taking (x, y, z) and returning the block type */
+    function makeChunk(getBlock, xBegin, xEnd, yBegin, yEnd, zBegin, zEnd) {
+        var chunkGeometry = new THREE.Geometry(),
+            transparentChunkGeometry = new THREE.Geometry();
+    
+        for (var x = xBegin; x < xEnd; x++) {
+            for (var y = yBegin; y < yEnd; y++) {
+                for (var z = zBegin; z < zEnd; z++) {
+                    var block = getBlock(x, y, z);
+                    
+                    if (block === blockTypes.Air) {
+                        continue;
+                    }
+                    
+                    var faceVisibility = faceDirections.map(function (direction) {
+                        return getBlock(x + direction[0], y + direction[1], z + direction[2]);
+                    }).map(function (neighbour) {
+                        return block !== neighbour && isPortalBlock(neighbour);
+                    });
+                    
+                    // Transparent blocks can't be in same geometry due to rendering issues
+                    if (isTransparentBlock(block)) {
+                        addCube(block, faceVisibility, transparentChunkGeometry, reusableMatrix.makeTranslation(x - xBegin, y - yBegin, z - zBegin));
+                    } else {
+                        addCube(block, faceVisibility, chunkGeometry, reusableMatrix.makeTranslation(x - xBegin, y - yBegin, z - zBegin));
+                    }
+                }
+            }
+        }
+        
+        chunkGeometry.mergeVertices();
+        transparentChunkGeometry.mergeVertices();
+        
+        var chunkMesh = new THREE.Mesh(chunkGeometry, new THREE.MeshBasicMaterial({
+            map: texImage
+        }));
+        
+        var transparentChunkMesh = new THREE.Mesh(transparentChunkGeometry, new THREE.MeshBasicMaterial({
+            map: texImage,
+            transparent: true
+        }));
+        
+        chunkMesh.add(transparentChunkMesh);
+        
+        return chunkMesh;
+    }
+    
+    // Adds the bedrock bounds to the sides of the map
+    function addBedrock(scene, xSize, ySize, zSize) {
+        var textureCoordinateSet = getTextureCoordinates(blockTypes.Bedrock);
+        var centreX = xSize / 2,
+            centreY = ySize / 4,
+            centreZ = zSize / 2;
+        [faces.Left, faces.Back, faces.Right, faces.Front].forEach(function (faceId) {
+            var direction = faceDirections[faceId];
+            var rotation = faceRotations[faceId];
+            if (faceId === faces.Left || faceId === faces.Right) {
+                var width = zSize, height = ySize / 2;
+            } else {
+                var width = xSize, height = ySize / 2;
+            }
+            var geometry = new THREE.PlaneGeometry(width, height);
+            var texture = texImage.clone(), pair = textureCoordinateSet[faceId];
+            texture.offset.set(pair[0] / texTileCount, 1 - (1 + pair[1]) / texTileCount);
+            texture.repeat.set(1 / texTileCount, 1 / texTileCount);
+            texture.needsUpdate = true;
+            var material = new THREE.MeshBasicMaterial({
+                map: texture,
+                side: THREE.BackSide // as we're seeing from inside
+            });
+            var mesh = new THREE.Mesh(geometry, material);
+            mesh.position.set(
+                centreX + (xSize * direction[0]) / 2 + direction[0] / 2,
+                centreY + (ySize * direction[1]) / 2 + direction[1] / 2,
+                centreZ + (zSize * direction[2]) / 2 + direction[2] / 2
+            );
+            mesh.rotation.set(rotation[0], rotation[1], rotation[2]);
+            scene.add(mesh);
+        });
     }
 
     var requestFrame = (function(){
@@ -252,7 +322,13 @@ window.manic.graphics = (function (manic) {
     
     function init(levelArray, xSize, ySize, zSize) {
         function getBlock(x, y, z) {
-            return levelArray[y * xSize * zSize + z * zSize + x];
+            if (0 <= x && x < xSize
+                && 0 <= y && y < ySize
+                && 0 <= z && z < zSize) {
+                return levelArray[zSize * (y * xSize + z) + x];
+            } else {
+                return null;
+            }
         }
         
         texImage = THREE.ImageUtils.loadTexture(texFile, THREE.UVMapping, function () {
@@ -260,17 +336,24 @@ window.manic.graphics = (function (manic) {
             texImage.magFilter = THREE.NearestFilter;
             texImage.minFilter = THREE.LinearFilter;
             
+            var skyboxRadius = Math.sqrt(xSize * ySize) / 2, fog = true, fogDist = 128, fogColour = 0xffffff, skyColour = 0xa2d0ff;
+            
             var scene = new THREE.Scene();
-            var camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.1, 1000 );
+            if (fog) {
+                scene.fog = new THREE.Fog(fogColour, 1, fogDist);
+            }
+            
+            var camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.1, fog ? fogDist : 65535);
+            
             var renderer = new THREE.WebGLRenderer();
-            renderer.setClearColor(0xa2d0ff);
+            renderer.setClearColor(fog ? fogColour : 0xa2d0ff);
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.domElement.id = 'canvas';
             document.body.appendChild(renderer.domElement);
         
             camera.position.y = ySize / 2 + 10;
             camera.position.z = xSize / 2;
-            camera.position.x = xSize / 2;
+            camera.position.x = zSize / 2;
             
 			var controls = new THREE.FirstPersonControls( camera );
 
@@ -278,42 +361,50 @@ window.manic.graphics = (function (manic) {
 			controls.lookSpeed = 0.125;
 			controls.lookVertical = true;
         
-            var sceneGeometry = new THREE.Geometry;
+            var skybox = new THREE.Mesh(
+                new THREE.SphereGeometry(xSize),
+                new THREE.MeshBasicMaterial({
+                    color: 0xa2d0ff,
+                    side: THREE.BackSide // as we're seeing it from inside
+                })
+            );
+            skybox.position.set(xSize / 2, ySize / 2, zSize / 2);
+            scene.add(skybox);
         
-            for (var x = 0; x < xSize; x++) {
-                for (var y = 0; y < ySize; y++) {
-                    for (var z = 0; z < zSize; z++) {
-                        var block = getBlock(x, y, z);
-                        
-                        if (block === blockTypes.Air) {
-                            continue;
-                        }
-                        
-                        var faceVisibility = faceDirections.map(function (direction) {
-                            return getBlock(x + direction[0], y + direction[1], z + direction[2]);
-                        }).map(function (neighbour) {
-                            return block !== neighbour && isPortalBlock(neighbour);
-                        });
-                        
-                        addCube(block, faceVisibility, sceneGeometry, reusableMatrix.makeTranslation(x, y, z));
-                    }
+            var chunkSize = 32, chunks = [];
+        
+            for (var x = 0; x < xSize; x += chunkSize) {
+                chunks[x] = [];
+                for (var z = 0; z < zSize; z += chunkSize) {
+                    var chunk = makeChunk(getBlock, x, Math.min(x + chunkSize, xSize), 0, ySize, z, Math.min(z + chunkSize, zSize));
+                    chunk.position.set(x, 0, z);
+                    scene.add(chunk);
+                    chunks[x][z] = chunk;
                 }
             }
             
-            var mesh = new THREE.Mesh(sceneGeometry, new THREE.MeshBasicMaterial({
-                color: 0xffffff,
-                map: texImage,
-                transparent: true,
-                overdraw: true
-            }));
-            
-            scene.add(mesh);
+            addBedrock(scene, xSize, ySize, zSize);
             
             var clock = new THREE.Clock();
         
             requestAnimationFrame(function render() {
                 requestAnimationFrame(render);
+                
                 controls.update( clock.getDelta() );
+                
+                // hide chunks behind fog
+                if (fog) {
+                    var playerX = camera.position.x, playerZ = camera.position.z;
+                    var chunkDiameter = Math.sqrt(Math.pow(chunkSize, 2) + Math.pow(chunkSize, 2));
+                    for (var x = 0; x < xSize; x += chunkSize) {
+                        for (var z = 0; z < zSize; z += chunkSize) {
+                            var chunkX = x + chunkSize / 2, chunkZ = z + chunkSize / 2,
+                                dist = Math.sqrt(Math.pow(chunkX - playerX, 2) + Math.pow(chunkZ - playerZ, 2));
+                            chunks[x][z].visible = (dist < fogDist + chunkDiameter);
+                        }
+                    }
+                }
+                
                 renderer.render(scene, camera);
             });
             
