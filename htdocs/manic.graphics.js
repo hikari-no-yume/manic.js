@@ -201,47 +201,42 @@ window.manic.graphics = (function (manic) {
         return face;
     });
 
-    function makeFace(textureCoordinates, faceId) {
-        var face = cachedFaceGeometries[faceId].clone();
-        
-        // Texture co-ordinates (UV mapping)
-        var LeftX = textureCoordinates[0] / texTileCount,
-            RightX = LeftX + 1 / texTileCount,
-            TopY = 1 - (1 + textureCoordinates[1]) / texTileCount,
-            BottomY = TopY + 1 / texTileCount;
-        
-        // This relies on PlaneGeometry being two triangles with this specific winding
-        face.faceVertexUvs[0] = [
-            [
-                new THREE.Vector2(LeftX, BottomY),
-                new THREE.Vector2(LeftX, TopY),
-                new THREE.Vector2(RightX, BottomY)
-            ],
-            [
-                new THREE.Vector2(LeftX, TopY),
-                new THREE.Vector2(RightX, TopY),
-                new THREE.Vector2(RightX, BottomY)
-            ]
-        ];
-        face.buffersNeedUpdate = true;
-        face.uvsNeedUpdate = true;
-        return face;
-    }
-
-    /* faceVisibility is used to exclude specific faces
+    /* Adds geometry for a cube to a map
+     *
+     * faceVisibility is used to exclude specific faces
      * e.g. makeCube(blockTypes.Grass, [true, false, false, false, false, false])
      * would only draw the top face
      */
-    function makeCube(id, faceVisibility) {
+    function addCube(id, faceVisibility, geometry, matrix) {
         var coordinateSet = getTextureCoordinates(id);
-
-        var cube = new THREE.Geometry();
-        for (var i = 0; i < faceVisibility.length; i++) {
-            if (faceVisibility[i]) {
-                cube.merge(makeFace(coordinateSet[i], i), reusableMatrix.identity());
+        
+        for (var faceId = 0; faceId < faceVisibility.length; faceId++) {
+            if (faceVisibility[faceId]) {
+                var textureCoordinates = coordinateSet[faceId];
+                
+                // Face texture co-ordinates (UV mapping)
+                var LeftX = textureCoordinates[0] / texTileCount,
+                    RightX = LeftX + 1 / texTileCount,
+                    TopY = 1 - (1 + textureCoordinates[1]) / texTileCount,
+                    BottomY = TopY + 1 / texTileCount;
+                
+                // Add face geometry to map geometry
+                geometry.merge(cachedFaceGeometries[faceId], matrix);
+                
+                // We update existing (default) UVs for cube face, hence the length offsets
+                // PlaneGeometry is made up of two triangles
+                var faceVertexUvs =  geometry.faceVertexUvs[0];
+                var faceVertexUv = faceVertexUvs[faceVertexUvs.length - 2];
+                faceVertexUv[0].set(LeftX, BottomY);
+                faceVertexUv[1].set(LeftX, TopY);
+                faceVertexUv[2].set(RightX, BottomY);
+                
+                faceVertexUv = faceVertexUvs[faceVertexUvs.length - 1];
+                faceVertexUv[0].set(LeftX, TopY);
+                faceVertexUv[1].set(RightX, TopY);
+                faceVertexUv[2].set(RightX, BottomY);
             }
         }
-        return cube;
     }
 
     var requestFrame = (function(){
@@ -302,9 +297,7 @@ window.manic.graphics = (function (manic) {
                             return block !== neighbour && isPortalBlock(neighbour);
                         });
                         
-                        var cube = makeCube(block, faceVisibility);
-                        
-                        sceneGeometry.merge(cube, reusableMatrix.makeTranslation(x, y, z));
+                        addCube(block, faceVisibility, sceneGeometry, reusableMatrix.makeTranslation(x, y, z));
                     }
                 }
             }
