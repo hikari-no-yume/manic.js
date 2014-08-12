@@ -168,32 +168,41 @@ window.manic.graphics = (function (manic) {
     faceDirections[faces.Back] = [0, 0, -1];
     faceDirections[faces.Left] = [-1, 0, 0];
 
-    function makeFace(textureCoordinates, faceId) {
-        var face = new THREE.PlaneGeometry(1, 1),
-            direction = faceDirections[faceId],
-            matrix = new THREE.Matrix4();
+    /* We reuse this single matrix to save having to constantly allocate matrices */
+    var reusableMatrix = new THREE.Matrix4();
+
+    var cachedFaceGeometries = faceDirections.map(function (direction, faceId) {
+        var face = new THREE.PlaneGeometry(1, 1);
         switch (faceId) {
             case faces.Top:
-                matrix.makeRotationX(-Math.PI / 2);
+                reusableMatrix.makeRotationX(-Math.PI / 2);
                 break;
             case faces.Bottom:
-                matrix.makeRotationX(Math.PI / 2);
+                reusableMatrix.makeRotationX(Math.PI / 2);
                 break;
             case faces.Front:
                 // No rotation needed
+                reusableMatrix.identity();
                 break;
             case faces.Right:
-                matrix.makeRotationY(Math.PI/2);
+                reusableMatrix.makeRotationY(Math.PI/2);
                 break;
             case faces.Back:
-                matrix.makeRotationY(Math.PI);
+                reusableMatrix.makeRotationY(Math.PI);
                 break;
             case faces.Left:
-                matrix.makeRotationY(-Math.PI/2);
+                reusableMatrix.makeRotationY(-Math.PI/2);
                 break;
             default:
                 break;
         }
+        face.applyMatrix(reusableMatrix);
+        face.applyMatrix(reusableMatrix.makeTranslation(direction[0] / 2, direction[1] / 2, direction[2] / 2));
+        return face;
+    });
+
+    function makeFace(textureCoordinates, faceId) {
+        var face = cachedFaceGeometries[faceId].clone();
         
         // Texture co-ordinates (UV mapping)
         var LeftX = textureCoordinates[0] / texTileCount,
@@ -216,8 +225,6 @@ window.manic.graphics = (function (manic) {
         ];
         face.buffersNeedUpdate = true;
         face.uvsNeedUpdate = true;
-        face.applyMatrix(matrix);
-        face.applyMatrix(matrix.makeTranslation(direction[0] / 2, direction[1] / 2, direction[2] / 2));
         return face;
     }
 
@@ -228,11 +235,10 @@ window.manic.graphics = (function (manic) {
     function makeCube(id, faceVisibility) {
         var coordinateSet = getTextureCoordinates(id);
 
-        var cube = new THREE.Geometry(),
-            matrix = new THREE.Matrix4();
+        var cube = new THREE.Geometry();
         for (var i = 0; i < faceVisibility.length; i++) {
             if (faceVisibility[i]) {
-                cube.merge(makeFace(coordinateSet[i], i), matrix);
+                cube.merge(makeFace(coordinateSet[i], i), reusableMatrix.identity());
             }
         }
         return cube;
@@ -267,7 +273,7 @@ window.manic.graphics = (function (manic) {
             renderer.domElement.id = 'canvas';
             document.body.appendChild(renderer.domElement);
         
-            var limit = 32;
+            var limit = 128;
         
             camera.position.y = ySize / 2 + 10;
             camera.position.z = limit / 2;
@@ -279,8 +285,7 @@ window.manic.graphics = (function (manic) {
 			controls.lookSpeed = 0.125;
 			controls.lookVertical = true;
         
-            var sceneGeometry = new THREE.Geometry,
-                matrix = new THREE.Matrix4();
+            var sceneGeometry = new THREE.Geometry;
         
             for (var x = 0; x < limit; x++) {
                 for (var y = 0; y < ySize; y++) {
@@ -299,7 +304,7 @@ window.manic.graphics = (function (manic) {
                         
                         var cube = makeCube(block, faceVisibility);
                         
-                        sceneGeometry.merge(cube, matrix.makeTranslation(x, y, z));
+                        sceneGeometry.merge(cube, reusableMatrix.makeTranslation(x, y, z));
                     }
                 }
             }
