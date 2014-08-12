@@ -8,7 +8,7 @@
     
     var levelData = null, levelArray = null;
     
-    var GUI;
+    var LoadingScreen;
     
     function copyBytes(dest, pos, src, len) {
         (new Uint8Array(dest, pos, len)).set(new Uint8Array(src));
@@ -69,8 +69,8 @@
         serverNameH.textContent = serverName;
         MOTDH = document.createElement('h2');
         MOTDH.textContent = MOTD;
-        GUI.appendChild(serverNameH);
-        GUI.appendChild(MOTDH);
+        LoadingScreen.appendChild(serverNameH);
+        LoadingScreen.appendChild(MOTDH);
         console.log('Connected to a version ' + version + ' server, "' + serverName + '" - "' + MOTD + '", and you\'re ' + (userType === 0x64 ? '' : 'not') + ' an admin');
     };
     
@@ -81,7 +81,7 @@
         progressBar.max = 100;
         progressBar.value = 0;
         
-        GUI.appendChild(progressBar);
+        LoadingScreen.appendChild(progressBar);
     };
     packetHandlers[packetTypes.LevelDataChunk] = function (type, length, chunk, progress) {
         if (length < 1024) {
@@ -149,7 +149,7 @@
     }
     
     window.onload = function () {
-        GUI = document.getElementById('gui');
+        LoadingScreen = document.getElementById('gui');
         connection = new WebSocket("ws://localhost:25566/");
         connection.onopen = function () {
             console.log('Connected');
