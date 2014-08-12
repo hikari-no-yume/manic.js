@@ -115,17 +115,6 @@
         progressText.textContent = 'Loaded map (' + xSize + '×' + ySize + '×' + zSize + ')';
         
         manic.graphics.init(levelArray, xSize, ySize, zSize);
-        /*var html = '', y = 0;
-        for (var x = 0; x < xSize; x++) {
-            html += '<tr>'
-            for (var z = 0; z < zSize; z++) {
-                html += '<td>' + levelArray[y * xSize * zSize + z * zSize + x] + '</td>';
-            }
-            html += '</tr>';
-        }
-        var elem = document.createElement('table');
-        elem.innerHTML = html;
-        document.body.appendChild(elem);*/
     };
     
     function handlePackets() {
