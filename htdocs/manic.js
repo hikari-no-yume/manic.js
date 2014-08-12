@@ -8,6 +8,8 @@
     
     var levelData = null, levelArray = null;
     
+    var GUI;
+    
     function copyBytes(dest, pos, src, len) {
         (new Uint8Array(dest, pos, len)).set(new Uint8Array(src));
     }
@@ -67,23 +69,19 @@
         serverNameH.textContent = serverName;
         MOTDH = document.createElement('h2');
         MOTDH.textContent = MOTD;
-        document.body.appendChild(serverNameH);
-        document.body.appendChild(MOTDH);
+        GUI.appendChild(serverNameH);
+        GUI.appendChild(MOTDH);
         console.log('Connected to a version ' + version + ' server, "' + serverName + '" - "' + MOTD + '", and you\'re ' + (userType === 0x64 ? '' : 'not') + ' an admin');
     };
     
-    var chunkedLevelData = null, progressBar = null, progressText = null;
+    var chunkedLevelData = null, progressBar = null;
     packetHandlers[packetTypes.LevelInitialize] = function () {
         chunkedLevelData = [];
         progressBar = document.createElement('progress');
         progressBar.max = 100;
         progressBar.value = 0;
         
-        progressText = document.createElement('h1');
-        progressText.textContent = "Loading map...";
-        
-        document.body.appendChild(progressText);
-        document.body.appendChild(progressBar);
+        GUI.appendChild(progressBar);
     };
     packetHandlers[packetTypes.LevelDataChunk] = function (type, length, chunk, progress) {
         if (length < 1024) {
@@ -112,7 +110,6 @@
         
         /* remove first 4 bytes (length is prefixed as Uint32 for some reason) */
         levelArray = levelArray.subarray(4);
-        progressText.textContent = 'Loaded map (' + xSize + '×' + ySize + '×' + zSize + ')';
         
         manic.graphics.init(levelArray, xSize, ySize, zSize);
     };
@@ -152,6 +149,7 @@
     }
     
     window.onload = function () {
+        GUI = document.getElementById('gui');
         connection = new WebSocket("ws://localhost:25566/");
         connection.onopen = function () {
             console.log('Connected');

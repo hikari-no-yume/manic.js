@@ -5,7 +5,7 @@ This project uses the THREE.js library (`/htdocs/extlib/three.min.js`) © its re
 
 This project uses zlib.js library (`/htdocs/extlib/gunzip.min.js`) © imaya 2012, the license of which is here: https://github.com/imaya/zlib.js/blob/master/LICENSE
 
-Block textures (`/htdocs/terrain.png`) from Minecraft Classic, © 2009-2012 Markus Persson.
+Block textures (`/htdocs/terrain.png` and `/htdocs/background.png`) from Minecraft Classic, © 2009-2012 Markus Persson.
 
 Code except where otherwise noted © 2014 Andrea Faulds.
 
