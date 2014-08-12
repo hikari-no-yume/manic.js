@@ -81,7 +81,6 @@ window.manic.graphics = (function (manic) {
     var texFile = 'terrain.png';
     var texImage = null;
     var texTileSize = 16, texTileCount = 16;
-    var tileWidth = 16, tileHeight = 8;
     var textureCoordinates = {};
     textureCoordinates[blockTypes.Stone] = [1, 0];
     textureCoordinates[blockTypes.Dirt] = [2, 0];
@@ -144,55 +143,10 @@ window.manic.graphics = (function (manic) {
         }
         return tex;
     }
-    
-    var materialCache = {},
-        materialSetCache = {};
-    function getMaterialSet(id) {
-        if (materialSetCache.hasOwnProperty(id)) {
-            return materialSetCache[id];
-        } else {
-            var coords = getTextureCoordinates(id),
-                transparent = isTransparentBlock(id),
-                materialSet = [];
-            for (var i = 0; i < coords.length; i++) {
-                var pair = coords[i],
-                    pairString = pair[0] + ',' + pair[1],
-                    material;
-                if (materialCache.hasOwnProperty(pairString)) {
-                    material = materialCache[pairString];
-                } else {
-                    var texture = texImage.clone();
-                    texture.offset.set(pair[0] / texTileCount, 1 - (1 + pair[1]) / texTileCount);
-                    texture.repeat.set(1 / texTileCount, 1 / texTileCount);
-                    texture.needsUpdate = true;
-                    material = new THREE.MeshBasicMaterial({
-                        color: 0xffffff,
-                        map: texture,
-                        transparent: transparent,
-                        overdraw: transparent
-                    });
-                    materialCache[pairString] = material;
-                }
-                materialSet[i] = material;
-            }
-            materialSetCache[id] = materialSet;
-            return materialSet;
-        }
-    }
 
-    function randomMaterialSet() {
-        return getMaterialSet(Math.rand(0x31 + 1));
+    function randomTextureCoordinates() {
+        return getTextureCoordinatesSet(Math.rand(0x31 + 1));
     }
-
-    function calcIsometricSize(mapSize) {
-        return [
-            (mapSize[0] + mapSize[2]) * tileWidth / 2,
-            (mapSize[0] + mapSize[2]) * tileHeight / 2
-        ];
-    }
-
-    var cachedCubeGeometry = new THREE.BoxGeometry(1, 1, 1);
-    var cachedPlaneGeometry = new THREE.PlaneGeometry(1, 1);
 
     var faces = new manic.Enum({
         Top: 0,
@@ -214,32 +168,56 @@ window.manic.graphics = (function (manic) {
     faceDirections[faces.Back] = [0, 0, -1];
     faceDirections[faces.Left] = [-1, 0, 0];
 
-    function makeFace(material, faceId) {
-        var face = new THREE.Mesh(cachedPlaneGeometry, material),
-            direction = faceDirections[faceId];
+    function makeFace(textureCoordinates, faceId) {
+        var face = new THREE.PlaneGeometry(1, 1),
+            direction = faceDirections[faceId],
+            matrix = new THREE.Matrix4();
         switch (faceId) {
             case faces.Top:
-                face.rotation.set(-Math.PI / 2, 0, 0);
+                matrix.makeRotationX(-Math.PI / 2);
                 break;
             case faces.Bottom:
-                face.rotation.set(Math.PI / 2, 0, 0);
+                matrix.makeRotationX(Math.PI / 2);
                 break;
             case faces.Front:
-                face.rotation.set(0, 0, 0);
+                // No rotation needed
                 break;
             case faces.Right:
-                face.rotation.set(0, Math.PI/2, 0);
+                matrix.makeRotationY(Math.PI/2);
                 break;
             case faces.Back:
-                face.rotation.set(0, Math.PI, 0);
+                matrix.makeRotationY(Math.PI);
                 break;
             case faces.Left:
-                face.rotation.set(0, -Math.PI/2, 0);
+                matrix.makeRotationY(-Math.PI/2);
                 break;
             default:
                 break;
         }
-        face.position.set(direction[0] / 2, direction[1] / 2, direction[2] / 2);
+        
+        // Texture co-ordinates (UV mapping)
+        var LeftX = textureCoordinates[0] / texTileCount,
+            RightX = LeftX + 1 / texTileCount,
+            TopY = 1 - (1 + textureCoordinates[1]) / texTileCount,
+            BottomY = TopY + 1 / texTileCount;
+        
+        // This relies on PlaneGeometry being two triangles with this specific winding
+        face.faceVertexUvs[0] = [
+            [
+                new THREE.Vector2(LeftX, BottomY),
+                new THREE.Vector2(LeftX, TopY),
+                new THREE.Vector2(RightX, BottomY)
+            ],
+            [
+                new THREE.Vector2(LeftX, TopY),
+                new THREE.Vector2(RightX, TopY),
+                new THREE.Vector2(RightX, BottomY)
+            ]
+        ];
+        face.buffersNeedUpdate = true;
+        face.uvsNeedUpdate = true;
+        face.applyMatrix(matrix);
+        face.applyMatrix(matrix.makeTranslation(direction[0] / 2, direction[1] / 2, direction[2] / 2));
         return face;
     }
 
@@ -248,29 +226,16 @@ window.manic.graphics = (function (manic) {
      * would only draw the top face
      */
     function makeCube(id, faceVisibility) {
-        var materialSet = getMaterialSet(id);
-        var transparent = isTransparentBlock(id);
-        
-        // More efficient to use actual cube than six surfaces, where possible
-        if (faceVisibility[0] && faceVisibility[1]
-            && faceVisibility[2] && faceVisibility[3]
-            && faceVisibility[4] && faceVisibility[5]) {
-            var materials = [];
-            
-            materialSet.forEach(function (material, i) {
-                materials[reorderingMap[i]] = material;
-            });
-            var cube = new THREE.Mesh(cachedCubeGeometry, new THREE.MeshFaceMaterial(materials));
-            return cube;
-        } else {
-            var cube = new THREE.Object3D();
-            for (var i = 0; i < faceVisibility.length; i++) {
-                if (faceVisibility[i]) {
-                    cube.add(makeFace(materialSet[i], i));
-                }
+        var coordinateSet = getTextureCoordinates(id);
+
+        var cube = new THREE.Geometry(),
+            matrix = new THREE.Matrix4();
+        for (var i = 0; i < faceVisibility.length; i++) {
+            if (faceVisibility[i]) {
+                cube.merge(makeFace(coordinateSet[i], i), matrix);
             }
-            return cube;
         }
+        return cube;
     }
 
     var requestFrame = (function(){
@@ -314,6 +279,9 @@ window.manic.graphics = (function (manic) {
 			controls.lookSpeed = 0.125;
 			controls.lookVertical = true;
         
+            var sceneGeometry = new THREE.Geometry,
+                matrix = new THREE.Matrix4();
+        
             for (var x = 0; x < limit; x++) {
                 for (var y = 0; y < ySize; y++) {
                     for (var z = 0; z < limit; z++) {
@@ -331,13 +299,19 @@ window.manic.graphics = (function (manic) {
                         
                         var cube = makeCube(block, faceVisibility);
                         
-                        cube.position.x = x;
-                        cube.position.y = y;
-                        cube.position.z = z;
-                        scene.add(cube);
+                        sceneGeometry.merge(cube, matrix.makeTranslation(x, y, z));
                     }
                 }
             }
+            
+            var mesh = new THREE.Mesh(sceneGeometry, new THREE.MeshBasicMaterial({
+                color: 0xffffff,
+                map: texImage,
+                transparent: true,
+                overdraw: true
+            }));
+            
+            scene.add(mesh);
             
             var clock = new THREE.Clock();
         
