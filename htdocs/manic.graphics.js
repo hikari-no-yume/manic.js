@@ -384,6 +384,15 @@ window.manic.graphics = (function (manic) {
                 };
     }());
     
+    var camera = null, renderer = null, scene = null;
+    var chunks = null;
+    var rendering = true, initialised = false;
+    
+    function teleportPlayer(x, y, z, xRot, yRot) {
+        camera.position.set(x, y, z);
+        camera.rotation.set(xRot, yRot, 0);
+    }
+    
     function init(levelArray, xSize, ySize, zSize) {
         function getBlock(x, y, z) {
             if (0 <= x && x < xSize
@@ -395,97 +404,148 @@ window.manic.graphics = (function (manic) {
             }
         }
         
-        texImage = THREE.ImageUtils.loadTexture(texFile, THREE.UVMapping, function () {
-            // pixelated upscale, smooth downscale
-            texImage.magFilter = THREE.NearestFilter;
-            texImage.minFilter = THREE.LinearFilter;
-            
-            var skyboxRadius = Math.sqrt(xSize * ySize) / 2, fog = true, fogDist = 128, fogColour = 0xffffff, skyColour = 0xa2d0ff;
-            
-            var scene = new THREE.Scene();
-            if (fog) {
-                scene.fog = new THREE.Fog(fogColour, 1, fogDist);
-            }
-            
-            var camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.1, fog ? fogDist : 65535);
-            
-            var renderer = new THREE.WebGLRenderer();
-            renderer.setClearColor(fog ? fogColour : 0xa2d0ff);
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.domElement.id = 'canvas';
-            document.body.appendChild(renderer.domElement);
+        // pixelated upscale, smooth downscale
+        texImage.magFilter = THREE.NearestFilter;
+        texImage.minFilter = THREE.LinearFilter;
         
-            camera.position.y = ySize / 2 + 10;
-            camera.position.z = xSize / 2;
-            camera.position.x = zSize / 2;
-            
-			var controls = new THREE.FirstPersonControls( camera );
+        var skyboxRadius = Math.sqrt(xSize * ySize) / 2, fog = true, fogDist = 128, fogColour = 0xffffff, skyColour = 0xa2d0ff;
+        
+        scene = new THREE.Scene();
+        if (fog) {
+            scene.fog = new THREE.Fog(fogColour, 1, fogDist);
+        }
+        
+        camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.1, fog ? fogDist : 65535);
+        
+        renderer = new THREE.WebGLRenderer();
+        renderer.setClearColor(fog ? fogColour : 0xa2d0ff);
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.domElement.id = 'canvas';
+        document.body.appendChild(renderer.domElement);
+    
+        camera.position.y = ySize / 2 + 10;
+        camera.position.z = xSize / 2;
+        camera.position.x = zSize / 2;
+        
+        var controls = new THREE.FirstPersonControls( camera );
 
-			controls.movementSpeed = 5;
-			controls.lookSpeed = 0.125;
-			controls.lookVertical = true;
-        
-            var skybox = new THREE.Mesh(
-                new THREE.SphereGeometry(xSize),
-                new THREE.MeshBasicMaterial({
-                    color: 0xa2d0ff,
-                    side: THREE.BackSide // as we're seeing it from inside
-                })
-            );
-            skybox.position.set(xSize / 2, ySize / 2, zSize / 2);
-            scene.add(skybox);
-        
-            var chunkSize = 32, chunks = [];
-        
-            for (var x = 0; x < xSize; x += chunkSize) {
-                chunks[x] = [];
-                for (var z = 0; z < zSize; z += chunkSize) {
+        controls.movementSpeed = 5;
+        controls.lookSpeed = 0.125;
+        controls.lookVertical = true;
+    
+        var skybox = new THREE.Mesh(
+            new THREE.SphereGeometry(xSize),
+            new THREE.MeshBasicMaterial({
+                color: 0xa2d0ff,
+                side: THREE.BackSide // as we're seeing it from inside
+            })
+        );
+        skybox.position.set(xSize / 2, ySize / 2, zSize / 2);
+        scene.add(skybox);
+    
+        var chunkSize = 32;
+    
+        chunks = [];
+        for (var x = 0; x < xSize; x += chunkSize) {
+            chunks[x] = [];
+            for (var z = 0; z < zSize; z += chunkSize) {
+                // When using fog, we can generate on-demand
+                if (fog) {
+                    chunks[x][z] = null;
+                } else {
                     var chunk = makeChunk(getBlock, x, Math.min(x + chunkSize, xSize), 0, ySize, z, Math.min(z + chunkSize, zSize));
                     chunk.position.set(x, 0, z);
                     scene.add(chunk);
                     chunks[x][z] = chunk;
                 }
             }
-            
-            addBedrock(scene, xSize, ySize, zSize);
-            
-            var clock = new THREE.Clock();
+        }
         
-            requestAnimationFrame(function render() {
-                requestAnimationFrame(render);
-                
-                controls.update( clock.getDelta() );
-                
-                // hide chunks behind fog
-                if (fog) {
-                    var playerX = camera.position.x, playerZ = camera.position.z;
-                    var chunkDiameter = Math.sqrt(Math.pow(chunkSize, 2) + Math.pow(chunkSize, 2));
-                    for (var x = 0; x < xSize; x += chunkSize) {
-                        for (var z = 0; z < zSize; z += chunkSize) {
-                            var chunkX = x + chunkSize / 2, chunkZ = z + chunkSize / 2,
-                                dist = Math.sqrt(Math.pow(chunkX - playerX, 2) + Math.pow(chunkZ - playerZ, 2));
-                            chunks[x][z].visible = (dist < fogDist + chunkDiameter);
+        addBedrock(scene, xSize, ySize, zSize);
+        
+        var clock = new THREE.Clock();
+    
+        requestAnimationFrame(function render() {
+            if (!rendering) {
+                return;
+            }
+            requestAnimationFrame(render);
+            
+            controls.update( clock.getDelta() );
+            
+            // hide chunks behind fog
+            if (fog) {
+                var playerX = camera.position.x, playerZ = camera.position.z;
+                var chunkDiameter = Math.sqrt(Math.pow(chunkSize, 2) + Math.pow(chunkSize, 2));
+                for (var x = 0; x < xSize; x += chunkSize) {
+                    for (var z = 0; z < zSize; z += chunkSize) {
+                        var chunkX = x + chunkSize / 2, chunkZ = z + chunkSize / 2,
+                            dist = Math.sqrt(Math.pow(chunkX - playerX, 2) + Math.pow(chunkZ - playerZ, 2)),
+                            visible = (dist < fogDist + chunkDiameter);
+                        if (chunks[x][z] !== null) {
+                            chunks[x][z].visible = visible;
+                        } else if (visible) {
+                            var chunk = makeChunk(getBlock, x, Math.min(x + chunkSize, xSize), 0, ySize, z, Math.min(z + chunkSize, zSize));
+                            chunk.position.set(x, 0, z);
+                            scene.add(chunk);
+                            chunks[x][z] = chunk;
                         }
                     }
                 }
-                
-                renderer.render(scene, camera);
-            });
+            }
             
-            window.addEventListener( 'resize', function () {
-				camera.aspect = window.innerWidth / window.innerHeight;
-				camera.updateProjectionMatrix();
+            renderer.render(scene, camera);
+        });
+        
+        window.addEventListener( 'resize', function () {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
 
-				renderer.setSize( window.innerWidth, window.innerHeight );
+            renderer.setSize( window.innerWidth, window.innerHeight );
 
-				controls.handleResize();
-            }, false );
+            controls.handleResize();
+        }, false );
+        
+        initialised = true;
+    }
+    
+    function deinit() {
+        if (!initialised) {
+            return;
+        }
+        initialised = false;
+        scene.traverse(function destroyer(item) {
+            try {
+                if (item instanceof THREE.Mesh) {
+                    destroyer(item.material);
+                    destroyer(item.geometry);
+                } else if (item instanceof THREE.Material) {
+                    destroyer(item.map);
+                    item.dispose();
+                } else if (typeof item === 'object' && item.hasOwnProperty('dispose')) {
+                    console.log('Destroyed non-mesh/material thing ' + item.constructor.name);
+                    item.dispose();
+                }
+            } catch (e) {
+                console.log(e);
+            }
+        });
+        document.body.removeChild(renderer.domElement);
+        rendering = false;
+    }
+    
+    function preLoad(callback) {
+        texImage = THREE.ImageUtils.loadTexture(texFile, THREE.UVMapping, function () {
+            callback();
         }, function () {
             alert("Failed to load texture");
         });
     }
     
     return {
-        init: init
+        preLoad: preLoad,
+        init: init,
+        deinit: deinit,
+        teleportPlayer: teleportPlayer
     };
 }(window.manic));
