@@ -268,11 +268,9 @@ window.manic.graphics = (function (manic) {
             renderer.domElement.id = 'canvas';
             document.body.appendChild(renderer.domElement);
         
-            var limit = 128;
-        
             camera.position.y = ySize / 2 + 10;
-            camera.position.z = limit / 2;
-            camera.position.x = limit / 2;
+            camera.position.z = xSize / 2;
+            camera.position.x = xSize / 2;
             
 			var controls = new THREE.FirstPersonControls( camera );
 
@@ -282,9 +280,9 @@ window.manic.graphics = (function (manic) {
         
             var sceneGeometry = new THREE.Geometry;
         
-            for (var x = 0; x < limit; x++) {
+            for (var x = 0; x < xSize; x++) {
                 for (var y = 0; y < ySize; y++) {
-                    for (var z = 0; z < limit; z++) {
+                    for (var z = 0; z < zSize; z++) {
                         var block = getBlock(x, y, z);
                         
                         if (block === blockTypes.Air) {
