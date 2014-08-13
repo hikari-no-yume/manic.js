@@ -78,7 +78,7 @@
         manic.GUI.formatText(MOTDH, MOTD);
         LoadingScreen.appendChild(serverNameH);
         LoadingScreen.appendChild(MOTDH);
-        console.log('Connected to a version ' + version + ' server, "' + serverName + '" - "' + MOTD + '", and you\'re ' + (userType === 0x64 ? '' : 'not') + ' an admin');
+        console.log('You\'re ' + (userType === 0x64 ? '' : 'not') + ' an admin');
     };
     
     var chunkedLevelData = null, progressBar = null;
@@ -150,6 +150,9 @@
         if (player < 0) {
             manic.graphics.teleportPlayer(x, y, z, yaw, pitch);
         }
+    };
+    packetHandlers[packetTypes.ServerSetBlock] = function (type, x, y, z, id) {
+        manic.graphics.setBlockAndUpdateWorld(x, y, z, id);
     };
     packetHandlers[packetTypes.PositionOrientation] = function (type, player, x, y, z, yaw, pitch) {
         // Convert to float

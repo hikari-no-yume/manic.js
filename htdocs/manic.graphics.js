@@ -116,7 +116,7 @@ window.manic.graphics = (function (manic) {
     textureCoordinates[blockTypes.MossyCobblestone] = [4, 2];
     textureCoordinates[blockTypes.Obsidian] = [5, 2];
     textureCoordinates[blockTypes.Sponge] = [0, 3];
-    textureCoordinates[blockTypes.Glass] = [0, 3];
+    textureCoordinates[blockTypes.Glass] = [1, 3];
     textureCoordinates[blockTypes.RedCloth] = [0, 4];
     textureCoordinates[blockTypes.OrangeCloth] = [1, 4];
     textureCoordinates[blockTypes.YellowCloth] = [2, 4];
@@ -282,7 +282,7 @@ window.manic.graphics = (function (manic) {
         }
         // This function only supports flowers for now, so for other special  blocks we pass on to addBlock
         if (!isFlower(id)) {
-            addBlock(id, faceVisibility, geometry, matrix);
+            addCube(id, faceVisibility, geometry, matrix);
             return;
         }
         
@@ -295,7 +295,7 @@ window.manic.graphics = (function (manic) {
     
     /* Makes a map chunk within the given bounds (begin <= position < end)
        getBlock is a callback taking (x, y, z) and returning the block type */
-    function makeChunk(getBlock, xBegin, xEnd, yBegin, yEnd, zBegin, zEnd) {
+    function makeChunk(xBegin, xEnd, yBegin, yEnd, zBegin, zEnd) {
         var chunkGeometry = new THREE.Geometry(),
             transparentChunkGeometry = new THREE.Geometry();
     
@@ -384,8 +384,45 @@ window.manic.graphics = (function (manic) {
                 };
     }());
     
+    var levelArray = null, xSize = null, ySize = null, zSize = null;
+    function getBlock(x, y, z) {
+        if (0 <= x && x < xSize
+            && 0 <= y && y < ySize
+            && 0 <= z && z < zSize) {
+            return levelArray[zSize * (y * xSize + z) + x];
+        } else {
+            return null;
+        }
+    }
+    
+    function setBlock(x, y, z, newValue) {
+        if (0 <= x && x < xSize
+            && 0 <= y && y < ySize
+            && 0 <= z && z < zSize) {
+            levelArray[zSize * (y * xSize + z) + x] = newValue;
+        }
+    }
+    
+    function setBlockAndUpdateWorld(x, y, z, newValue) {
+        setBlock(x, y, z, newValue);
+        chunks[Math.floor(x / chunkSize) * chunkSize][Math.floor(z / chunkSize) * chunkSize].needsUpdate = true;
+    }
+    
+    var chunks = null, chunkSize = 32;
+    function addOrUpdateChunk(x, z) {
+        var mesh = makeChunk(x, Math.min(x + chunkSize, xSize), 0, ySize, z, Math.min(z + chunkSize, zSize));
+        mesh.position.set(x, 0, z);
+        if (chunks[x][z].mesh) {
+            scene.remove(chunks[x][z].mesh);
+            chunks[x][z].mesh.geometry.dispose();
+            chunks[x][z].mesh.material.dispose();
+        }
+        scene.add(mesh);
+        chunks[x][z].mesh = mesh;
+        chunks[x][z].needsUpdate = false;
+    }
+    
     var camera = null, renderer = null, scene = null;
-    var chunks = null;
     var rendering = true, initialised = false;
     
     function teleportPlayer(x, y, z, xRot, yRot) {
@@ -393,16 +430,11 @@ window.manic.graphics = (function (manic) {
         camera.rotation.set(xRot, yRot, 0);
     }
     
-    function init(levelArray, xSize, ySize, zSize) {
-        function getBlock(x, y, z) {
-            if (0 <= x && x < xSize
-                && 0 <= y && y < ySize
-                && 0 <= z && z < zSize) {
-                return levelArray[zSize * (y * xSize + z) + x];
-            } else {
-                return null;
-            }
-        }
+    function init(_levelArray, _xSize, _ySize, _zSize) {
+        levelArray = _levelArray;
+        xSize = _xSize;
+        ySize = _ySize;
+        zSize = _zSize;
         
         // pixelated upscale, smooth downscale
         texImage.magFilter = THREE.NearestFilter;
@@ -443,20 +475,17 @@ window.manic.graphics = (function (manic) {
         skybox.position.set(xSize / 2, ySize / 2, zSize / 2);
         scene.add(skybox);
     
-        var chunkSize = 32;
-    
         chunks = [];
         for (var x = 0; x < xSize; x += chunkSize) {
             chunks[x] = [];
             for (var z = 0; z < zSize; z += chunkSize) {
-                // When using fog, we can generate on-demand
-                if (fog) {
-                    chunks[x][z] = null;
-                } else {
-                    var chunk = makeChunk(getBlock, x, Math.min(x + chunkSize, xSize), 0, ySize, z, Math.min(z + chunkSize, zSize));
-                    chunk.position.set(x, 0, z);
-                    scene.add(chunk);
-                    chunks[x][z] = chunk;
+                chunks[x][z] = {
+                    needsUpdate: false,
+                    mesh: null
+                };
+                // When using fog, we can generate on-demand!
+                if (!fog) {
+                    addOrUpdateChunk(x, z);
                 }
             }
         }
@@ -482,14 +511,21 @@ window.manic.graphics = (function (manic) {
                         var chunkX = x + chunkSize / 2, chunkZ = z + chunkSize / 2,
                             dist = Math.sqrt(Math.pow(chunkX - playerX, 2) + Math.pow(chunkZ - playerZ, 2)),
                             visible = (dist < fogDist + chunkDiameter);
-                        if (chunks[x][z] !== null) {
-                            chunks[x][z].visible = visible;
+                        if (chunks[x][z].mesh !== null) {
+                            chunks[x][z].mesh.visible = visible;
                         } else if (visible) {
-                            var chunk = makeChunk(getBlock, x, Math.min(x + chunkSize, xSize), 0, ySize, z, Math.min(z + chunkSize, zSize));
-                            chunk.position.set(x, 0, z);
-                            scene.add(chunk);
-                            chunks[x][z] = chunk;
+                            addOrUpdateChunk(x, z);
                         }
+                    }
+                }
+            }
+            // Update outdated chunks
+            for (var x = 0; x < xSize; x += chunkSize) {
+                for (var z = 0; z < zSize; z += chunkSize) {
+                    if (chunks[x][z].needsUpdate
+                        // No need to update hidden meshes
+                        && (chunks[x][z].mesh && chunks[x][z].mesh.visible)) {
+                        addOrUpdateChunk(x, z);
                     }
                 }
             }
@@ -546,6 +582,7 @@ window.manic.graphics = (function (manic) {
         preLoad: preLoad,
         init: init,
         deinit: deinit,
-        teleportPlayer: teleportPlayer
+        teleportPlayer: teleportPlayer,
+        setBlockAndUpdateWorld: setBlockAndUpdateWorld
     };
 }(window.manic));
