@@ -29,7 +29,7 @@ Finally, we use a WebSocket-to-TCP bridge. I'm using the, quite frankly, rubbish
 OK, but is it worth using?
 ==========================
 
-No, not really just now. It'll display at quite poor FPS (limited optimisation) a portion of the Minecraft world, and you can move around it, but it ignores most packets (it doesn't even display players) and your only way to communicate is by the console. But hey, we're getting there!
+Maybe not just now. It runs at decent FPS, but may freeze your browser for a while when preparing the map. You can move around in it, but it ignores most packets (it doesn't even display players). But hey, we're getting there! You can even chat with T!
 
 Why is it called manic.js?!
 ===========================
