@@ -425,9 +425,16 @@ window.manic.graphics = (function (manic) {
     var camera = null, renderer = null, scene = null;
     var rendering = true, initialised = false;
     
-    function teleportPlayer(x, y, z, xRot, yRot) {
+    function setPositionRotation(x, y, z, xRot, yRot, zRot) {
         camera.position.set(x, y, z);
-        camera.rotation.set(xRot, yRot, 0);
+        camera.rotation.set(xRot, yRot, zRot);
+    }
+    
+    function getPosition() {
+        return [camera.position.x, camera.position.y, camera.position.z];
+    }
+    function getRotation() {
+        return [camera.rotation.x, camera.rotation.y, camera.rotation.z];
     }
     
     function init(_levelArray, _xSize, _ySize, _zSize) {
@@ -582,7 +589,9 @@ window.manic.graphics = (function (manic) {
         preLoad: preLoad,
         init: init,
         deinit: deinit,
-        teleportPlayer: teleportPlayer,
+        setPositionRotation: setPositionRotation,
+        getPosition: getPosition,
+        getRotation: getRotation,
         setBlockAndUpdateWorld: setBlockAndUpdateWorld
     };
 }(window.manic));

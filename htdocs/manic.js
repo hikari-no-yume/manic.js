@@ -66,8 +66,15 @@
     function byteAngleToRadians(byteAngle) {
         return byteAngle * (Math.PI * 2) / 255;
     }
+    function radiansAngleToByte(radiansAngle) {
+        radiansAngle = ((radiansAngle % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+        return Math.floor(radiansAngle * 255 / (Math.PI * 2));
+    }
     function shortPositionToFloat(shortPosition) {
         return shortPosition / 32;
+    }
+    function floatPositionToShort(floatPosition) {
+        return Math.floor(floatPosition * 32);
     }
     
     var packetHandlers = {}, serverNameH = null, MOTDH = null;
@@ -97,6 +104,8 @@
         chunkedLevelData.push(chunk);
         progressBar.value = progress;
     };
+    
+    var positionUpdateInterval = null;
     packetHandlers[packetTypes.LevelFinalize] = function (type, xSize, ySize, zSize) {
         var length = 0;
         for (var i = 0; i < chunkedLevelData.length; i++) {
@@ -130,6 +139,26 @@
                 sendPacket(packetTypes.Message, -1, msgs[i]);
             }
         });
+        var lastPosition = null, lastRotation = null;
+        positionUpdateInterval = window.setInterval(function () {
+            var position = manic.graphics.getPosition(),
+                rotation = manic.graphics.getRotation();
+            if (lastPosition === null || (position[0] !== lastPosition[0] || position[1] !== lastPosition[1] || position[2] !== lastPosition[2])
+                || lastRotation === null || (rotation[0] !== lastRotation[0] || rotation[1] !== lastRotation[1] || rotation[2] !== lastRotation[2])) {
+                sendPacket(
+                    packetTypes.PositionOrientation,
+                    -1,
+                    floatPositionToShort(position[0]),
+                    floatPositionToShort(position[1]),
+                    floatPositionToShort(position[2]),
+                    radiansAngleToByte(-rotation[1]),
+                    radiansAngleToByte(rotation[0])
+                );
+                
+                lastPosition = position;
+                lastRotation = rotation;
+            }
+        }, 200);
     };
     packetHandlers[packetTypes.Message] = function (type, player, message) {
         /* Negative players colour message yellow, don't ask me why */
@@ -148,7 +177,7 @@
         pitch = byteAngleToRadians(pitch);
         /* Teleport */
         if (player < 0) {
-            manic.graphics.teleportPlayer(x, y, z, yaw, pitch);
+            manic.graphics.setPositionRotation(x, y, z, pitch, -yaw, 0);
         }
     };
     packetHandlers[packetTypes.ServerSetBlock] = function (type, x, y, z, id) {
@@ -164,7 +193,7 @@
         pitch = byteAngleToRadians(pitch);
         /* Teleport */
         if (player < 0) {
-            manic.graphics.teleportPlayer(x, y, z, yaw, pitch);
+            manic.graphics.setPositionRotation(x, y, z, pitch, -yaw, 0);
         }
     };
     
@@ -242,6 +271,8 @@
             connection.onclose = function () {
                 console.log('Connection close');
                 manic.graphics.deinit();
+                window.clearInterval(positionUpdateInterval);
+                positionUpdateInterval = null;
                 LoadingScreen.innerHTML = '<h1 class=text-f>Connection lost</h1>';
             };
         });
