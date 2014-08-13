@@ -101,7 +101,7 @@ window.manic.graphics = (function (manic) {
     var textureCoordinates = {};
     textureCoordinates[blockTypes.Stone] = [1, 0];
     textureCoordinates[blockTypes.Dirt] = [2, 0];
-    textureCoordinates[blockTypes.Wood] = [4, 0];
+    textureCoordinates[blockTypes.WoodenPlank] = [4, 0];
     textureCoordinates[blockTypes.Brick] = [7, 0];
     textureCoordinates[blockTypes.Water] = textureCoordinates[blockTypes.StationaryWater] = [14, 0];
     textureCoordinates[blockTypes.Cobblestone] = [0, 1];
