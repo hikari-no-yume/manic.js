@@ -1,7 +1,7 @@
 What's this?
 ============
 
-![displaying a world with fog and the debug log](https://raw.githubusercontent.com/TazeTSchnitzel/manic.js/master/screenshot4.png)
+![displaying world with fog enabled and entering a chat message](https://raw.githubusercontent.com/TazeTSchnitzel/manic.js/master/screenshot8.png)
 
 A Minecraft Classic client written in JavaScript, utilising WebSocket (Classic speaks TCP, so a WebSocket-TCP bridge is needed) with Typed Arrays for communication and map parsing, [three.js](http://threejs.org) for 3D graphics, and [zlib.js](https://github.com/imaya/zlib.js) for map decompression.
 
